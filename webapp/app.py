@@ -8,6 +8,7 @@ from src.models.build_matrix import FEATURE_COLUMNS, MATRIX_PATH
 from src.models.walk_forward import _fit_before, VAL_DAYS, walk_forward, summarize
 from src.models.broader_eval import annual_walk_forward, summarize as broad_summarize
 from src.models.montecarlo_eval import evaluate as montecarlo_evaluate
+from src.models.montecarlo_eval import evaluate_all as montecarlo_evaluate_all
 
 app = Flask(__name__)
 
@@ -147,6 +148,22 @@ def get_montecarlo():
     if _montecarlo_cache is None:
         _montecarlo_cache = montecarlo_evaluate("wc2022", matches=get_matches())
     return _montecarlo_cache
+
+
+# All FOUR configured tournaments (WC 2022 + Euro 2016/2020/2024), pooled — the
+# breadth companion to the WC2022 deep-dive above. Same evaluate_all() `make
+# montecarlo-eval` prints from, so the CLI and the UI can't drift. Lazy + cached.
+_montecarlo_all_cache = None
+
+
+def get_montecarlo_all():
+    """The pooled multi-tournament round-reach backtest via the SAME
+    montecarlo_eval.evaluate_all() the CLI prints from. Reuses the cached cleaned
+    matches (skips the ~14s re-clean). Computed lazily, cached."""
+    global _montecarlo_all_cache
+    if _montecarlo_all_cache is None:
+        _montecarlo_all_cache = montecarlo_evaluate_all(matches=get_matches())
+    return _montecarlo_all_cache
 
 
 def _xgb_row(matches, home, away, ref, neutral):
@@ -551,6 +568,34 @@ def api_montecarlo():
             "n_train": int(m["n_train"])}
 
     return jsonify({"top": top, "landing": landing, "reach": reach, "meta": meta})
+
+
+@app.route("/api/montecarlo-all")
+def api_montecarlo_all():
+    # The whole-tournament simulation backtested across ALL FOUR configured
+    # tournaments (WC 2022 + Euro 2016/2020/2024), pooled — the breadth companion to
+    # /api/montecarlo's WC2022 deep-dive. Same numbers `make montecarlo-eval` prints.
+    d = get_montecarlo_all()
+
+    def r4(x):
+        return None if x is None else round(float(x), 4)
+
+    tournaments = [{
+        "name": t["name"], "year": int(t["year"]),
+        "n_teams": int(t["n_teams"]), "n_train": int(t["n_train"]),
+        "champion": t["champion"], "champion_rank": int(t["champion_rank"]),
+        "brier": r4(t["brier"]), "base_brier": r4(t["base_brier"]),
+        "logloss": r4(t["logloss"]), "base_logloss": r4(t["base_logloss"]),
+    } for t in d["tournaments"]]
+
+    pl = d["pooled"]
+    pooled = {
+        "n_tournaments": int(pl["n_tournaments"]), "n_teams": int(pl["n_teams"]),
+        "n_preds": int(pl["n_preds"]),
+        "brier": r4(pl["brier"]), "base_brier": r4(pl["base_brier"]),
+        "logloss": r4(pl["logloss"]), "base_logloss": r4(pl["base_logloss"]),
+    }
+    return jsonify({"tournaments": tournaments, "pooled": pooled})
 
 
 @app.route("/api/teams")

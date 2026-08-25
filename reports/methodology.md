@@ -2069,3 +2069,25 @@ standard way: `make broader-eval` and `make montecarlo-eval` captured before and
 the displayed decimal. Both endpoints are lazy + cached and deliberately not warmed at
 startup (each is one page's ~10 s cost), and the two tiles fetch independently so the slow
 broad block never blocks the Monte Carlo one.
+
+**Broadening the Monte Carlo tile to four tournaments on the scorecard (2026-08-25).** When
+the two eval tiles above were added, the Monte Carlo backtest was already broadened in the
+*model* layer to all four configured tournaments (`main()` pools WC 2022 + Euro 2016/2020/
+2024), but the *webapp* still surfaced only the WC 2022 deep-dive — the strongest result
+(four tournaments, pooled Brier 0.111 vs 0.136) lived only in `make montecarlo-eval`. This
+closed that gap the same surface-don't-remodel way. The pooling arithmetic that had been
+buried inside `main()` was extracted into a pure `evaluate_all(names, n, seed, matches=None)`
+returning the per-tournament summary rows plus the pooled Brier / log-loss; `main()` now
+prints from it, and `make montecarlo-eval` was captured before and after and `diff`'d to
+byte-identical — the standard anti-drift check, and the same discipline `run()`/`evaluate()`
+already followed. A new lazy+cached `/api/montecarlo-all` endpoint (reusing the cached
+cleaned matches, so no second ~14 s clean) serialises it, and a new `#sc-montecarlo-all`
+tile renders a per-edition table (champion + model P(win) rank, Brier/log-loss vs each
+format's own no-skill base rate) above the existing WC 2022 zoom (reframed "Zooming into
+one"). Its verdict is generated from the data, not hardcoded — including the honest
+not-favourite-biased spread it computes straight from the champion ranks: the model ranked
+Spain #1 before Euro 2024, yet rated the underdog champions (Italy #6 at Euro 2020, Portugal
+#5 at Euro 2016) only mid-table, exactly as any pre-tournament model should. Endpoint numbers
+were re-checked against the CLI to the displayed decimal (pooled Brier 0.1114 vs 0.1360,
+log-loss 0.3444 vs 0.4257), and the WC 2022 `/api/montecarlo` deep-dive endpoint was left
+untouched.

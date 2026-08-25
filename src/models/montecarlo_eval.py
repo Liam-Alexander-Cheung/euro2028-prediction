@@ -214,33 +214,46 @@ def run(name: str = "wc2022", n: int = 20000, seed: int = 0) -> None:
     print("    has no bookmaker benchmark. Per-match engine is CI-validated (Phase 4).")
 
 
-def main(names=("wc2022", "euro2016", "euro2020", "euro2024"),
-         n: int = 20000, seed: int = 0) -> None:
-    """Backtest the simulator across EVERY configured tournament and POOL the result.
+def evaluate_all(names=("wc2022", "euro2016", "euro2020", "euro2024"),
+                 n: int = 20000, seed: int = 0,
+                 matches: pd.DataFrame | None = None) -> dict:
+    """Backtest the simulator across EVERY configured tournament and POOL the result —
+    the PURE version (no printing), so the CLI report (`main()`) and the webapp's
+    /api/montecarlo endpoint read the exact same numbers and can never drift (the same
+    anti-drift discipline as walk_forward.summarize and this module's own evaluate()).
 
-    The single-tournament run() answers "does the sim work on this event"; this
+    The single-tournament evaluate() answers "does the sim work on this event"; this
     answers the project's real question — "does it work across the tournaments we
     have" — with the honest caveat that four is still few. Fits each tournament
     strictly pre-kickoff (reusing one cleaned-match load), scores round-reach against
     that format's own no-skill base rate, and pools every team-round prediction into a
-    single Brier / log-loss so no one event dominates the headline."""
-    matches = clean_matches(load_raw_matches())
-    print(f"{'=' * 78}\nMONTE CARLO TOURNAMENT BACKTEST — {len(names)} tournaments "
-          f"(n={n:,}, seed={seed})\n{'=' * 78}")
-    print("each: fit Dixon-Coles strictly BEFORE kickoff, simulate, score per-team "
-          "round-reach\nvs that format's no-skill base rate (16/N .. 1/N reach each "
-          "round; N = field size).\n")
-    print(f"{'tournament':<20}{'teams':>6}{'train':>9}{'champion (rank)':>20}"
-          f"{'Brier':>9}{'base':>8}{'logloss':>9}{'base':>8}")
+    single Brier / log-loss so no one event dominates the headline.
 
+    `matches`: optionally pass an already-cleaned frame (the webapp keeps one cached)
+    to skip the ~14s clean; None => load + clean here so the CLI stays self-contained.
+
+    Returns:
+      tournaments : one summary dict per tournament (name, year, n_teams, n_train,
+                    champion team + model rank, Brier / log-loss + no-skill refs) —
+                    the per-tournament table rows.
+      pooled      : Brier / log-loss (model + no-skill base) over every team-round
+                    prediction stacked across tournaments, plus the counts.
+    """
+    if matches is None:
+        matches = clean_matches(load_raw_matches())
+
+    tournaments = []
     P, Y, B = [], [], []
     for name in names:
         d = evaluate(name, n=n, seed=seed, matches=matches)
         m, land, sc = d["meta"], d["landing"], d["reach"]
-        champ = f"{land['champion']['team']} ({land['champion']['rank']}/{m['n_teams']})"
-        print(f"{m['name'] + ' ' + str(m['year']):<20}{m['n_teams']:>6}{m['n_train']:>9,}"
-              f"{champ:>20}{sc['brier']:>9.4f}{sc['base_brier']:>8.4f}"
-              f"{sc['logloss']:>9.4f}{sc['base_logloss']:>8.4f}")
+        tournaments.append({
+            "name": m["name"], "year": m["year"],
+            "n_teams": m["n_teams"], "n_train": m["n_train"],
+            "champion": land["champion"]["team"], "champion_rank": land["champion"]["rank"],
+            "brier": sc["brier"], "base_brier": sc["base_brier"],
+            "logloss": sc["logloss"], "base_logloss": sc["base_logloss"],
+        })
         a = d["reach_arrays"]
         P.append(a["p"]); Y.append(a["y"]); B.append(a["base"])
 
@@ -253,12 +266,41 @@ def main(names=("wc2022", "euro2016", "euro2020", "euro2024"),
         pc = np.clip(pp, 1e-6, 1 - 1e-6)
         return float(np.mean(-(y * np.log(pc) + (1 - y) * np.log(1 - pc))))
 
-    print(f"\n{'-' * 78}\nPOOLED  ({len(y) * 5} team-round predictions: {len(y)} teams "
-          f"x 5 rounds across {len(names)} tournaments)\n{'-' * 78}")
-    print(f"  Brier   : model {brier(p):.4f}   vs base-rate {brier(b):.4f}   "
-          f"({'beats' if brier(p) < brier(b) else 'WORSE than'} no-skill)")
-    print(f"  Log-loss: model {logloss(p):.4f}   vs base-rate {logloss(b):.4f}   "
-          f"({'beats' if logloss(p) < logloss(b) else 'WORSE than'} no-skill)")
+    pooled = {
+        "n_tournaments": len(names), "n_teams": int(len(y)), "n_preds": int(len(y) * 5),
+        "brier": brier(p), "base_brier": brier(b),
+        "logloss": logloss(p), "base_logloss": logloss(b),
+    }
+    return {"tournaments": tournaments, "pooled": pooled}
+
+
+def main(names=("wc2022", "euro2016", "euro2020", "euro2024"),
+         n: int = 20000, seed: int = 0) -> None:
+    """Print the pooled multi-tournament backtest. Every number comes from
+    evaluate_all() so this CLI report and the webapp endpoint are identical by
+    construction (verified byte-identical, the project's standard anti-drift check)."""
+    d = evaluate_all(names, n=n, seed=seed)
+    print(f"{'=' * 78}\nMONTE CARLO TOURNAMENT BACKTEST — {len(names)} tournaments "
+          f"(n={n:,}, seed={seed})\n{'=' * 78}")
+    print("each: fit Dixon-Coles strictly BEFORE kickoff, simulate, score per-team "
+          "round-reach\nvs that format's no-skill base rate (16/N .. 1/N reach each "
+          "round; N = field size).\n")
+    print(f"{'tournament':<20}{'teams':>6}{'train':>9}{'champion (rank)':>20}"
+          f"{'Brier':>9}{'base':>8}{'logloss':>9}{'base':>8}")
+
+    for t in d["tournaments"]:
+        champ = f"{t['champion']} ({t['champion_rank']}/{t['n_teams']})"
+        print(f"{t['name'] + ' ' + str(t['year']):<20}{t['n_teams']:>6}{t['n_train']:>9,}"
+              f"{champ:>20}{t['brier']:>9.4f}{t['base_brier']:>8.4f}"
+              f"{t['logloss']:>9.4f}{t['base_logloss']:>8.4f}")
+
+    pl = d["pooled"]
+    print(f"\n{'-' * 78}\nPOOLED  ({pl['n_preds']} team-round predictions: {pl['n_teams']} teams "
+          f"x 5 rounds across {pl['n_tournaments']} tournaments)\n{'-' * 78}")
+    print(f"  Brier   : model {pl['brier']:.4f}   vs base-rate {pl['base_brier']:.4f}   "
+          f"({'beats' if pl['brier'] < pl['base_brier'] else 'WORSE than'} no-skill)")
+    print(f"  Log-loss: model {pl['logloss']:.4f}   vs base-rate {pl['base_logloss']:.4f}   "
+          f"({'beats' if pl['logloss'] < pl['base_logloss'] else 'WORSE than'} no-skill)")
 
     print("\n--- Honest limitations ---")
     print(f"  * {len(names)} tournaments is still FEW: a champion is one Bernoulli draw, so")

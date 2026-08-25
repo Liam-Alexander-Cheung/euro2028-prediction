@@ -163,7 +163,63 @@ StatXI.views = StatXI.views || {};
     return broadTable(s.pooled) + '<p class="sc-verdict">' + broadVerdict(s) + '</p>';
   }
 
-  // --- 5) Monte Carlo tournament backtest (WC 2022 only) -----------------------
+  // --- 5a) Monte Carlo backtest ACROSS FOUR tournaments (breadth) --------------
+  // The same pre-kickoff-fit → simulate → score-round-reach test, run on all four
+  // configured tournaments and pooled, so the claim rests on more than one event.
+  function mcAllTable(rows){
+    var body = rows.map(function(t){
+      var brBeats = t.brier < t.base_brier;      // model beats no-skill this edition
+      var llBeats = t.logloss < t.base_logloss;
+      return '<tr><td>' + t.name + ' ' + t.year + '</td>' +
+        '<td>' + t.champion + ' (#' + t.champion_rank + '/' + t.n_teams + ')</td>' +
+        cell(sc(t.brier), brBeats) + '<td>' + sc(t.base_brier) + '</td>' +
+        cell(sc(t.logloss), llBeats) + '<td>' + sc(t.base_logloss) + '</td></tr>';
+    }).join('');
+    return '<table class="cmp sc-table"><thead><tr>' +
+      '<th>Tournament</th><th>Actual champion (model P(win) rank)</th>' +
+      '<th>Brier ↓</th><th>base</th><th>Log-loss ↓</th><th>base</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table>';
+  }
+  function mcPooledTable(p){
+    var brBest = bestIdx([p.brier, p.base_brier], -1);
+    var llBest = bestIdx([p.logloss, p.base_logloss], -1);
+    return '<table class="cmp sc-table"><thead><tr>' +
+      '<th>Pooled (' + p.n_teams + ' teams × 5 rounds = ' + p.n_preds + ')</th>' +
+      '<th>Model</th><th>No-skill base rate</th>' +
+      '</tr></thead><tbody>' +
+      '<tr><td>Brier ↓</td>' + cell(sc(p.brier), brBest === 0) + cell(sc(p.base_brier), brBest === 1) + '</tr>' +
+      '<tr><td>Log-loss ↓</td>' + cell(sc(p.logloss), llBest === 0) + cell(sc(p.base_logloss), llBest === 1) + '</tr>' +
+      '</tbody></table>';
+  }
+  function mcAllVerdict(d){
+    var p = d.pooled, rows = d.tournaments;
+    var beats = (p.brier < p.base_brier && p.logloss < p.base_logloss);
+    // The spread story, straight from the champion ranks: best-called vs worst-called.
+    var best = rows.reduce(function(a, b){ return b.champion_rank < a.champion_rank ? b : a; });
+    var worst = rows.reduce(function(a, b){ return b.champion_rank > a.champion_rank ? b : a; });
+    return '<p class="sc-verdict">Pooled over all <b>' + p.n_preds + ' team-round predictions</b> across ' +
+      p.n_tournaments + ' tournaments, the simulator ' + (beats ? 'beats' : 'does not beat') +
+      ' a no-skill base rate on both Brier (' + sc(p.brier) + ' vs ' + sc(p.base_brier) + ') and log-loss (' +
+      sc(p.logloss) + ' vs ' + sc(p.base_logloss) + '). And it is <b>not just backing favourites</b>: it ' +
+      'ranked ' + best.champion + ' #' + best.champion_rank + ' before ' + best.name + ' ' + best.year +
+      ', yet the underdog champion ' + worst.champion + ' sat only #' + worst.champion_rank + ' at ' +
+      worst.name + ' ' + worst.year + ' — as any honest pre-tournament model would rate them.</p>';
+  }
+  function mcAllLimitations(n){
+    return '<div class="sc-context"><span class="ico"></span><span>' +
+      '<b>Read this honestly — ' + n + ' tournaments is still few.</b> A champion is one coin-flip, so ' +
+      'tournament-<i>winner</i> calibration can’t be strongly proven even pooled; the round-reach score is a ' +
+      'real (if correlated) sanity check. No outright-winner odds market exists anywhere in this project, so ' +
+      'P(win trophy) has no bookmaker to benchmark against — the per-match engine underneath is the ' +
+      'CI-validated part. Euro games are simulated neutral, and a drawn knockout tie uses a ~50/50 shootout ' +
+      'coin-flip placeholder, not a fitted model.</span></div>';
+  }
+  function renderMonteCarloAll(d){
+    return mcAllTable(d.tournaments) + mcPooledTable(d.pooled) + mcAllVerdict(d) +
+      mcAllLimitations(d.pooled.n_tournaments);
+  }
+
+  // --- 5b) the same backtest, zoomed into ONE tournament (WC 2022) -------------
   // The whole bracket simulated from a strictly pre-kickoff fit, then scored on
   // per-team round-reach vs a no-skill base rate. One tournament — labelled as such.
   function mcTopTable(top){
@@ -202,22 +258,14 @@ StatXI.views = StatXI.views || {};
       (beats ? 'beats' : 'does not beat') + ' a no-skill base-rate on both Brier (' + sc(r.brier) + ' vs ' +
       sc(r.base_brier) + ') and log-loss (' + sc(r.logloss) + ' vs ' + sc(r.base_logloss) + ').</p>';
   }
-  function mcLimitations(){
-    return '<div class="sc-context"><span class="ico"></span><span>' +
-      '<b>Read this honestly — it’s one tournament.</b> A single champion is one coin-flip, so ' +
-      'tournament-<i>winner</i> calibration can’t be proven from it; the round-reach score pools 160 ' +
-      'correlated predictions as a sanity check, not a proof. And no outright-winner odds market exists ' +
-      'anywhere in this project, so P(win trophy) has no bookmaker to benchmark against — the per-match ' +
-      'engine underneath is the CI-validated part.</span></div>';
-  }
   function renderMonteCarlo(d){
     var m = d.meta;
-    var intro = '<p class="sc-verdict">' + m.name + ' ' + m.year + ', one tournament. Dixon–Coles ' +
-      'attack/defence strengths were fit on the ' + Number(m.n_train).toLocaleString() + ' matches before ' +
-      'kickoff, then the whole bracket — groups and knockouts — was played out ' +
-      Number(m.n).toLocaleString() + ' times.</p>';
-    return intro + mcTopTable(d.top) + mcLanding(d.landing) + mcReachTable(d.reach) +
-      mcVerdict(d) + mcLimitations();
+    var intro = '<p class="sc-verdict">The same test, zoomed into one edition. For ' + m.name + ' ' +
+      m.year + ', Dixon–Coles attack/defence strengths were fit on the ' +
+      Number(m.n_train).toLocaleString() + ' matches before kickoff, then the whole bracket — groups and ' +
+      'knockouts — was played out ' + Number(m.n).toLocaleString() + ' times, so you can see who the model ' +
+      'actually favoured and where the real deep runs landed.</p>';
+    return intro + mcTopTable(d.top) + mcLanding(d.landing) + mcReachTable(d.reach) + mcVerdict(d);
   }
 
   StatXI.views.scorecard = {
@@ -239,7 +287,9 @@ StatXI.views = StatXI.views || {};
         '<div id="sc-body">' + spinner() + '</div>' +
         '<h3>The bigger picture — every match with odds</h3>' +
         '<div id="sc-broad">' + spinnerBroad() + '</div>' +
-        '<h3>Simulating the whole tournament — World Cup 2022</h3>' +
+        '<h3>Simulating whole tournaments — four editions</h3>' +
+        '<div id="sc-montecarlo-all">' + spinnerMC() + '</div>' +
+        '<h3>Zooming into one — World Cup 2022</h3>' +
         '<div id="sc-montecarlo">' + spinnerMC() + '</div>' +
       '</section>';
     },
@@ -255,6 +305,11 @@ StatXI.views = StatXI.views || {};
       api.getBroadEval()
         .then(function(d){ broad.innerHTML = renderBroad(d); })
         .catch(function(e){ broad.innerHTML = errorBox(e.message || 'Broad evaluation unavailable.'); });
+
+      var mcAll = root.querySelector('#sc-montecarlo-all');
+      api.getMonteCarloAll()
+        .then(function(d){ mcAll.innerHTML = renderMonteCarloAll(d); })
+        .catch(function(e){ mcAll.innerHTML = errorBox(e.message || 'Simulation unavailable.'); });
 
       var mc = root.querySelector('#sc-montecarlo');
       api.getMonteCarlo()

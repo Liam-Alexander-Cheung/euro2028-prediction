@@ -68,8 +68,19 @@ WHERE THINGS STAND NOW (2026-08-13)   <<< READ THIS FIRST; blocks below are olde
         Verified: 0 same-group R16 rematches for all 3; each config reproduces the real R16
         draw; groups reconstructed from the DB match graph (not memory). Full write-up in
         methodology.md ("Broadening the backtest to the three Euros").
-  - NEXT UP (all optional): (a) surface the 4-tournament MC backtest on the #/scorecard page
-    (the WC2022 MC tile exists; broaden it to all four — same surface-not-model pattern);
+  - SECTION 5 — 4-TOURNAMENT MC BACKTEST SURFACED ON #/scorecard: DONE (2026-08-25).
+    The pooled Monte Carlo backtest (all four editions) is now a UI tile, same surface-
+    not-model pattern as SECTIONS 2-4. montecarlo_eval.main()'s pooling was extracted
+    into a pure evaluate_all() (per-tournament rows + pooled Brier/log-loss); main() now
+    PRINTS from it (make montecarlo-eval verified BYTE-IDENTICAL after the refactor). New
+    endpoint /api/montecarlo-all (lazy+cached, reuses the cached cleaned matches) serialises
+    it; api.getMonteCarloAll() feeds a new #sc-montecarlo-all tile ABOVE the existing WC2022
+    deep-dive (now reframed as "Zooming into one"). Endpoint numbers re-checked vs the CLI
+    to the decimal (pooled Brier .1114 vs .1360, log-loss .3444 vs .4257; per-tournament
+    Argentina 3/32, Portugal 5/24, Italy 6/24, Spain 1/24). Verdict + spread story
+    ("Spain #1 before Euro24, but underdog champ Italy only #6") generated FROM the ranks,
+    not hardcoded. WC2022 deep-dive endpoint /api/montecarlo unchanged.
+  - NEXT UP (all optional): (a) DONE — see SECTION 5 above;
     (b) a fitted penalty-shootout model (replaces the ~50/50 coin flip) + the hypothetical
     Euro 2028 run (needs a projected draw); (c) the STAGE-AWARE MODEL ROUTER stub (still
     "do NOT build yet"); (d) deadline items (registration Nov 2026, report Jan 2027).

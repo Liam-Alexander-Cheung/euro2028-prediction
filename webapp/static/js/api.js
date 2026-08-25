@@ -81,6 +81,11 @@ window.StatXI = window.StatXI || {};
     // the Monte Carlo tournament backtest (WC 2022): top-8 P(win), the actual
     // deep-run landing check, and round-reach Brier/log-loss vs no-skill. One call,
     // cached after the first (a pre-tournament fit + 20k simulations).
-    getMonteCarlo: function(){ return getJSON('/api/montecarlo'); }
+    getMonteCarlo: function(){ return getJSON('/api/montecarlo'); },
+
+    // the SAME simulation backtested across all four configured tournaments
+    // (WC 2022 + Euro 2016/2020/2024): per-tournament round-reach + a pooled
+    // Brier/log-loss over every team-round prediction. One call, cached.
+    getMonteCarloAll: function(){ return getJSON('/api/montecarlo-all'); }
   };
 })();
