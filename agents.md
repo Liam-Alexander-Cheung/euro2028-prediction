@@ -201,6 +201,18 @@ Run any of these via the Makefile (`make <name>`) — see Practical notes.
 
 ## What's NOT done yet
 
+**Status (2026-08-26): the engineering is virtually complete.** All three
+models (XGBoost W/D/L, Poisson/Dixon-Coles, Monte Carlo), the bookmaker
+benchmark, the tournament-level backtests across four tournaments (WC 2022 +
+Euro 2016/2020/2024), the live real-data webapp (SPA: landing / predict /
+detail / scorecard), and a full per-feature **test suite** (98 tests, `make
+test`) are all built and verified. What genuinely remains is (a) a few
+*optional / deferred / blocked* feature ideas — items 1–4 below, none on the
+critical path — and (b) the **deliverables** themselves: the written
+Projektbeschreibung, the poster, and the registration form (items 10–12). In
+short: the model and the software are done; what's left is mostly writing and
+paperwork, plus optional polish.
+
 1. **`u21_weighted_minutes_z`** — second prodigy z-score. Needs
    minutes-played data weighted by opponent strength. Not started.
 2. **`per90_vs_cohort_z`** — third prodigy z-score. Needs StatsBomb
@@ -225,18 +237,16 @@ Run any of these via the Makefile (`make <name>`) — see Practical notes.
    note predicted. See `src/models/` above.
 7. ✅ **Monte Carlo tournament simulator — DONE**, WC 2022 backtested and
    beating the base-rate baseline. See `src/models/` above.
-8. **Backtesting — partially done.** Per-match (Poisson vs XGBoost vs
-   bookmaker) is validated, and WC 2022 has a full pre-tournament
-   tournament backtest. Still to do: the same tournament-level backtest
-   run across Euro 2016/2020/2024 (only WC 2022 has a config so far —
-   `src/tournaments/wc2022.json`), so the trophy-winner claim rests on
-   more than one tournament.
-9. **Frontend redesign + real prediction card.** The five feature tools
-   are live; the visual redesign is underway (see `webapp/previews/`).
-   The planned "AI insight" / prediction section can now show **real**
-   model output (the models in #5–7 exist) — so it's no longer blocked on
-   "don't fabricate numbers," but it must be wired to the actual endpoints,
-   not hardcoded.
+8. ✅ **Backtesting — DONE.** Per-match (Poisson vs XGBoost vs bookmaker)
+   is validated, and the pre-tournament tournament-level backtest now
+   covers **four** tournaments (WC 2022 + Euro 2016/2020/2024; configs in
+   `src/tournaments/*.json`), pooled and beating the no-skill baseline. See
+   `src/models/` and the scorecard write-ups in methodology.md.
+9. ✅ **Frontend redesign + real prediction card — DONE.** The live SPA
+   (branch `webapp`) has landing / predict / detail / scorecard views wired
+   to real endpoints — the prediction card shows real Poisson+XGBoost output
+   as a range, and the scorecard surfaces the real backtests. Old feature
+   explorer kept at `/legacy`.
 10. **Projektbeschreibung** — the actual 10-15 page written report, due
     January 2027. `reports/methodology.md` is real material for this, not
     a substitute for it.

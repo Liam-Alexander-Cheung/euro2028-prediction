@@ -1,7 +1,33 @@
 TO-DO / NEXT SESSION
 ====================
 
-WHERE THINGS STAND NOW (2026-08-13)   <<< READ THIS FIRST; blocks below are older
+WHERE THINGS STAND NOW (2026-08-26)   <<< READ THIS FIRST; blocks below are older
+  - ENGINEERING IS VIRTUALLY DONE. All three models (XGBoost W/D/L, Poisson/
+    Dixon-Coles, Monte Carlo), the bookmaker benchmark, the 4-tournament
+    backtests, and the live real-data webapp are built + verified + pushed.
+  - NEW THIS SESSION — TEST SUITE (committed + pushed to `webapp`, 77562f1):
+      * tests/ — one file per feature/component (the classic layout), 98 tests,
+        run with `make test`. Tests the PIECES that make up the models (each
+        feature, weight, math helper), NOT the trained model as a black box.
+      * Core suite is DB-FREE + offline (~1.1s) on tiny hand-built fixtures in
+        tests/conftest.py (make_matches / make_squads factories). The two real-
+        data Germany-vs-San-Marino checks (rolling_form + a real Dixon-Coles fit)
+        are @pytest.mark.needs_db and AUTO-SKIP when data/statxi.db is absent
+        (conftest hook); they share one session-scoped real_matches load.
+      * Standing policy added to agents.md ("## Testing"): every NEW feature ships
+        a companion tests/test_<feature>.py asserting a real oracle, DB-free by
+        default, proven to bite (mutation-check). Full write-up in methodology.md.
+      * Removed the stale empty src/tests/ placeholder. Also committed Liam's
+        Projektbeschreibung draft PDF.
+  - WHAT'S ACTUALLY LEFT: (a) the written Projektbeschreibung (Jan 2027), (b) the
+    poster + presentation (Tomás), (c) Jugend forscht registration (Nov 2026) —
+    i.e. writing + paperwork; and OPTIONAL polish: the fitted penalty-shootout
+    model (replaces the ~50/50 coin flip), the hypothetical Euro 2028 run, and the
+    stage-aware model router stub (all still "optional / do-not-build-yet").
+
+--- SNAPSHOT (2026-08-13; superseded by the block above) ---
+
+WHERE THINGS STAND NOW (2026-08-13)   <<< blocks below are older
   - MODELS — all built, verified, benchmarked (details in DONE blocks + methodology.md):
       * XGBoost Win/Draw/Loss (match + squad + FIFA-rating features; walk_forward backtest).
       * Poisson / Dixon-Coles scoreline (Phases 1-5); beats XGBoost on the broad block.
