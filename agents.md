@@ -185,6 +185,20 @@ Run any of these via the Makefile (`make <name>`) — see Practical notes.
   tournaments of evidence, and no outright-winner odds market to calibrate
   P(win trophy) against.
 
+### `tests/` — the pytest suite (98 tests, one file per feature/component)
+- Run with **`make test`**. Config in `pytest.ini`; shared synthetic
+  fixtures (`make_matches`, `make_squads`, session-scoped `real_matches`) +
+  the `needs_db` auto-skip hook in `tests/conftest.py`.
+- One test file per feature/component (the classic layout), all live:
+  `test_rolling_form`, `test_head_to_head`, `test_goal_trend`,
+  `test_squad_age_depth`, `test_team_chemistry`, `test_weights`,
+  `test_transfer_value_delta`, `test_squad_ratings`, `test_name_matching`,
+  `test_odds`, `test_tournaments`, `test_poisson`, `test_montecarlo`.
+- The core suite is **DB-free and offline** — ~1.1 s against tiny hand-built
+  fixtures, not `data/statxi.db`. The two real-data checks (Germany ≫ San
+  Marino, in `rolling_form` and a real Dixon-Coles fit) are
+  `needs_db`-tagged and auto-skip when the DB is absent. See "## Testing".
+
 ## What's NOT done yet
 
 1. **`u21_weighted_minutes_z`** — second prodigy z-score. Needs
@@ -236,17 +250,21 @@ Run any of these via the Makefile (`make <name>`) — see Practical notes.
 - **One step at a time.** Build one function, explain it, verify it
   against a real, checkable test case, then move to the next. Don't
   generate a wholesale finished module in one pass.
+- **Every feature ships a test.** A feature/component function isn't
+  "done" until it has a companion `tests/test_<feature>.py` asserting it
+  against a real, checkable oracle. See the "## Testing" section below for
+  the how.
 - **Explain every new concept as it's introduced** — a new library, a
   new Python idiom, a new SQL/regex concept — as if the reader is
   learning it, not just approving it.
 - **Add inline code comments proactively.** Don't rely on chat-external
   explanation alone; comments should live with the code they explain.
-- **Verify, don't assume.** Re-run known test cases after any refactor
-  (e.g. the Germany/San Marino `rolling_form` sanity check) instead of
-  trusting that a diff "looks right." Multiple real regressions in this
-  project were only caught this way — including a script that silently
-  deleted a function, and one that destroyed its own source table
-  mid-run.
+- **Verify, don't assume.** Run **`make test`** after any refactor, and
+  re-run known real-data sanity checks (e.g. the Germany/San Marino
+  `rolling_form` check, now asserted in `tests/`) instead of trusting
+  that a diff "looks right." Multiple real regressions in this project
+  were only caught this way — including a script that silently deleted a
+  function, and one that destroyed its own source table mid-run.
 - **Never fabricate data.** Missing data returns `None`/`NaN` explicitly,
   never a guessed placeholder. Applies to unplayed matches, missing squad
   data, missing market values — everywhere.
@@ -262,6 +280,40 @@ Run any of these via the Makefile (`make <name>`) — see Practical notes.
   leans on an honest account of the actual engineering process — what
   broke, why, what was learned — not a highlights reel where nothing
   ever went wrong.
+
+## Testing
+
+The suite lives in `tests/` (top-level), runs with **`make test`**
+(pytest), and is built **one file per feature/component** — the classic
+layout. When you add or change a feature, follow these rules:
+
+- **Every feature/component ships a companion test before it's "done."**
+  A new function in `src/features.py` (or a model math helper, a parser, a
+  validator) gets its own `tests/test_<feature>.py`. Test the *pieces*
+  that make up a model — each feature, each weight, each math helper — not
+  the trained model as a black box.
+- **Assert a real, checkable oracle, not just "it runs."** Turn the
+  project's manual sanity checks into assertions: the equal-weight average
+  that collapses to a plain mean, Germany out-forming San Marino,
+  `normalize_name("Müller") == "muller"`. Pick inputs whose expected
+  output you can work out by hand.
+- **Keep the core suite DB-free and offline.** Every `src/features.py`
+  function is pure (DataFrame in, values out), so build tiny synthetic
+  fixtures — see the `make_matches` factory in `tests/conftest.py` —
+  rather than depending on `data/statxi.db` (gitignored / regenerable) or
+  the network. A real-data check is welcome but must be tagged
+  `@pytest.mark.needs_db`, which auto-skips when the DB is absent.
+- **Cover the missing-data contract.** These functions return
+  `NaN`/`None` for "no data" on purpose; assert that path (a debutant team
+  → `NaN`, never `0.5`), not only the happy path.
+- **Prove a new test bites.** After writing it, break the code once,
+  confirm the test goes red, then revert. A green test that can never fail
+  is false comfort.
+
+Every current feature/component has a test file. When you add a NEW feature
+or component, add its `tests/test_<feature>.py` the same way; if you add a
+genuinely model-level end-to-end test (a real fit/sim), keep it
+`needs_db`-tagged so the core suite stays DB-free and fast.
 
 ## Practical notes
 

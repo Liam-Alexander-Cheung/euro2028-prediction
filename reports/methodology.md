@@ -2091,3 +2091,76 @@ Spain #1 before Euro 2024, yet rated the underdog champions (Italy #6 at Euro 20
 were re-checked against the CLI to the displayed decimal (pooled Brier 0.1114 vs 0.1360,
 log-loss 0.3444 vs 0.4257), and the WC 2022 `/api/montecarlo` deep-dive endpoint was left
 untouched.
+
+## A real test suite: from printed sanity checks to `make test` (2026-08-26)
+
+For most of this project "verification" meant running a script and *reading* the
+output — the Germany-vs-San-Marino line in `poisson.py`'s `__main__` printed
+probabilities a human eyeballed, and the feature functions were checked once, by
+hand, against a real football fact and then trusted. That caught a lot (this file
+is full of bugs found by exactly that discipline), but it isn't *repeatable*: a
+refactor months later re-runs nothing automatically, and a sanity check that only
+lives in a `print` can't fail a build. `pytest` was already in `requirements.txt`
+and `src/tests/` had sat empty (a lone `.gitkeep`) since July. Time to use it.
+
+**The structure: one test file per feature/component, the classic layout.** The
+deliberate choice was to test the *pieces that make up the models* — each feature,
+each weight, each bit of scoreline maths — not the trained XGBoost model as a black
+box. So `tests/` holds `test_rolling_form.py`, `test_head_to_head.py`,
+`test_goal_trend.py`, `test_squad_age_depth.py`, `test_team_chemistry.py`,
+`test_weights.py`, `test_transfer_value_delta.py`, `test_squad_ratings.py`,
+`test_name_matching.py`, `test_odds.py`, `test_tournaments.py`, `test_poisson.py`,
+and `test_montecarlo.py` — 98 tests, run with a new `make test` target.
+
+**The key enabler: the feature functions are pure, so the suite needs no
+database.** Every `src/features.py` function takes a DataFrame in and returns
+values out, so a test can build a tiny hand-made DataFrame whose answer is
+computable on paper and assert the function reproduces it. The recurring oracle
+trick: if every synthetic match shares one date and one tournament, its recency
+and importance weights are identical and *cancel*, so the weighted mean collapses
+to a plain average — e.g. two wins, a draw and a loss must give exactly
+`(1+1+0.5+0)/4 = 0.625`, with no reference to the actual weighting constants. Same
+idea gives `team_chemistry` a squad of 3-Bayern-plus-1-Dortmund with a hand-derived
+Herfindahl of 0.625, and `wdl_from_grid` a 2×2 grid whose win/draw/loss split is
+read straight off the diagonal. This is why the core suite runs in **~1.1 s** with
+no `data/statxi.db` present at all — a future contributor (or a future agent) can
+clone, `make test`, and get a green suite without rebuilding 30 MB of scraped data.
+
+**Real data still gets a vote, but an optional one.** The genuine
+Germany-out-forms-San-Marino check survives — promoted from a printed number to an
+actual assertion — but tagged `@pytest.mark.needs_db`. A `conftest.py` hook skips
+every such test when `data/statxi.db` is absent, so the suite is honest either way:
+it *runs* the real check when the data is there (Germany's rolling form > 0.5 and >
+San Marino's; a real Dixon-Coles fit gives Germany P(win) > 0.9 vs San Marino), and
+cleanly reports `skipped`, never errors, when it isn't. The two real-data tests
+share one session-scoped `real_matches` fixture so the ~14 s load happens once, not
+per test — which alone cut the full run from ~32 s to ~16 s.
+
+**Missing-data contracts are tested as first-class behaviour, not the happy
+path.** The project rule is that unknown inputs return `NaN`/`None`, never a guessed
+value, so the tests assert that path explicitly: a debutant team's `rolling_form`
+is `NaN` (not `0.5`), an unknown squad's chemistry ratios are `NaN` (but its counts
+a true `0`), `team_pool_rating` returns `NaN` when a player would only be "known"
+from a *later* squad (the leakage guard), and `devig` on an impossible `1.0` odd
+returns all-`NaN`. The one *documented limitation* in `name_matching` — that the
+transliteration "Mueller" does not collapse to "muller" — is pinned by a test that
+asserts the two stay *different*, so if a future change closes that gap, someone
+updates the docstring on purpose rather than by accident.
+
+**The stochastic code is testable because it was already seeded.** The Monte Carlo
+`__main__` self-check (sampler vs analytic Dixon-Coles, agreeing to within Monte
+Carlo standard error) became `test_montecarlo.py`, and a full `simulate_tournament`
+run on Euro 2024 with uniform synthetic strengths asserts seeded reproducibility
+(two runs `assert_frame_equal`) plus the internal invariants (champion probabilities
+sum to 1, sixteen teams reach the R16, reach-probabilities monotone by round).
+
+**Proving the tests can actually fail.** A green test that can't go red is false
+comfort, so each new test file was checked by deliberately breaking the code once
+and confirming the failure: flipping `rolling_form`'s strict `< as_of_date` to `<=`
+made the boundary test drop from 1.0 to 0.46 as the on-date loss leaked in; changing
+`fifa_edition_for_date`'s `min(version, 24)` clamp to `25` failed the clamp test —
+both reverted. This "mutation check" is now written into the standing testing policy
+in `agents.md` (which `CLAUDE.md` imports), so the convention — every feature ships a
+companion test asserting a real oracle, DB-free by default, proven to bite — is
+enforced on future work, not just this batch. The old empty `src/tests/` placeholder
+was removed in favour of the top-level `tests/`.

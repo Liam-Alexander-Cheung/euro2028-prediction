@@ -14,7 +14,7 @@ PY := venv/bin/python           # the interpreter inside the project's virtualen
 
 # .PHONY tells make these targets are command names, not files to build — so it
 # always runs them and never gets confused by a same-named file appearing.
-.PHONY: help webapp kill \
+.PHONY: help test webapp kill \
         poisson poisson-eval poisson-rating \
         montecarlo montecarlo-eval \
         train evaluate broader-eval walk-forward build-matrix odds \
@@ -25,6 +25,9 @@ PY := venv/bin/python           # the interpreter inside the project's virtualen
 help:
 	@echo ""
 	@echo "  StatXI — run any script with:  make <name>"
+	@echo ""
+	@echo "  TESTS"
+	@echo "    make test              run the pytest suite (unit tests, no DB needed)"
 	@echo ""
 	@echo "  WEB"
 	@echo "    make webapp            start the Flask app  -> http://127.0.0.1:5001/"
@@ -58,6 +61,12 @@ help:
 	@echo "    make build-odds        parse odds exports -> match_odds table"
 	@echo "    make link-ratings      link players -> FIFA ratings (blocking+score)"
 	@echo ""
+
+# ---- Tests -----------------------------------------------------------------
+# Runs pytest via the venv's python so `import src.*` resolves from the repo
+# root. The suite is DB-free (synthetic fixtures); any `needs_db` test skips
+# automatically when data/statxi.db is absent.
+test:             ; $(PY) -m pytest
 
 # ---- Web -------------------------------------------------------------------
 webapp:
