@@ -177,7 +177,8 @@ def _validate_euro24_r16_slots(cfg: dict) -> None:
 
 
 def all_config_teams(cfg: dict) -> list[str]:
-    """Flat list of the 32 team names in a validated config (group order)."""
+    """Flat list of every team in a validated config, in group order (32 for a
+    wc32 config, 24 for a euro24 config)."""
     return [t for teams in cfg["groups"].values() for t in teams]
 
 

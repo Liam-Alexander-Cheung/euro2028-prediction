@@ -49,11 +49,22 @@ def parse_dob_age(raw):
 
 
 def clean_player_name(raw):
-    """Strip footnote markers, extract captain status into its own flag."""
+    """Strip footnote markers, extract captain status into its own flag.
+
+    Wikipedia marks the captain two ways depending on the era of the page: the
+    spelled-out "(captain)" and the abbreviation "(c)" (common on pre-2016 squad
+    pages). Both must set is_captain AND be stripped from the name. An earlier
+    version handled only "(captain)", which left the "(c)" captains unflagged
+    with the marker still stuck to their name (e.g. "Marcel Desailly (c)"). Match
+    both, case-insensitively \u2014 but require the exact token "(c)"/"(captain)", so
+    an unrelated parenthetical like "(coach)" is never mistaken for a captaincy.
+    (A `make build-schema` rebuild applies this to the already-stored rows.)
+    """
     if not isinstance(raw, str):  # guards against None/NaN player names instead of crashing
         return None, False
-    is_captain = "(captain)" in raw
-    name = raw.replace("(captain)", "").strip()
+    lowered = raw.lower()
+    is_captain = "(captain)" in lowered or "(c)" in lowered
+    name = re.sub(r"\((?:captain|c)\)", "", raw, flags=re.IGNORECASE).strip()
     name = re.sub(r"[\*\u2020]+$", "", name).strip()
     return name, is_captain
 
